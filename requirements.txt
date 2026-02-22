@@ -2,7 +2,7 @@ fastapi>=0.115.0
 uvicorn[standard]
 sqlalchemy
 pydantic[email]
-passlib[bcrypt]
+bcrypt>=4.0,<5
 python-jose[cryptography]
 python-multipart
 python-dotenv
