@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -73,6 +73,9 @@ Rules you MUST follow:
 8. Never provide advice on criminal law, family law, personal injury, or other non-business matters."""
 
 RAG_GUIDANCE = """
+Definitions:
+- "Knowledge Base" ALWAYS means the user's own uploaded PDFs in this app (not an external dataset, not generic internet knowledge).
+
 You have access to the user's uploaded Knowledge Base documents (PDFs) via retrieval. If the user asks whether you can access their Knowledge Base, the correct answer is YES: you can search and use their uploaded PDFs when it helps answer their question.
 
 You may be provided with optional excerpts from the user's uploaded Knowledge Base documents (PDFs).
@@ -103,6 +106,7 @@ def chat_ping():
 
 @app.post("/api/chat/stream", tags=["AI Chat"])
 async def chat_stream(
+    request: Request,
     payload: ChatRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -170,18 +174,26 @@ async def chat_stream(
     messages.extend(history)
 
     async def generate():
-        stream = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=messages,
-            temperature=0.3,
-            max_tokens=2048,
-            stream=True,
-        )
-        for chunk in stream:
-            delta = chunk.choices[0].delta
-            if delta.content:
-                yield f"data: {json.dumps({'token': delta.content})}\n\n"
-        yield "data: [DONE]\n\n"
+        try:
+            stream = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=messages,
+                temperature=0.3,
+                max_tokens=2048,
+                stream=True,
+            )
+            for chunk in stream:
+                if await request.is_disconnected():
+                    break
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    yield f"data: {json.dumps({'token': delta.content})}\n\n"
+        except Exception:
+            # Client disconnects or upstream issues should not crash the server.
+            return
+        finally:
+            if not await request.is_disconnected():
+                yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         generate(),
