@@ -61,3 +61,20 @@ class LawyerSessionOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class MpesaUpdate(BaseModel):
+    msisdn: str
+
+
+class MpesaOut(BaseModel):
+    msisdn: str | None = None
+
+
+class BillingTransactionOut(BaseModel):
+    id: str
+    description: str
+    amount_kes: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

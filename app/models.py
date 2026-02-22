@@ -48,3 +48,28 @@ class LawyerSession(Base):
     status = Column(String, nullable=False, default="pending", index=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class BillingProfile(Base):
+    __tablename__ = "billing_profiles"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True, unique=True)
+
+    # Store as digits only, e.g. 254712345678
+    mpesa_msisdn = Column(String, nullable=True)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class BillingTransaction(Base):
+    __tablename__ = "billing_transactions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+
+    description = Column(String, nullable=False)
+    amount_kes = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
