@@ -43,3 +43,21 @@ class KBDocumentOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class LawyerSessionCreate(BaseModel):
+    topic: str
+    date: str  # YYYY-MM-DD
+    time: str  # e.g. "09:00 AM"
+    notes: str | None = None
+
+
+class LawyerSessionOut(BaseModel):
+    id: str
+    topic: str
+    scheduled_at: datetime
+    status: str
+    notes: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

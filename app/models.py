@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 
 from .database import Base
 
@@ -30,5 +30,21 @@ class KnowledgeBaseDocument(Base):
     size_bytes = Column(Integer, nullable=False, default=0)
 
     storage_path = Column(String, nullable=False)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class LawyerSession(Base):
+    __tablename__ = "lawyer_sessions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+
+    topic = Column(String, nullable=False)
+    scheduled_at = Column(DateTime, nullable=False)
+    notes = Column(Text, nullable=True)
+
+    # pending → confirmed (admin later). completed/cancelled for future.
+    status = Column(String, nullable=False, default="pending", index=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

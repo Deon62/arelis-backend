@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from .database import Base, engine, get_db
 from .routers import auth
 from .routers import kb
+from .routers import sessions
 from .auth import get_current_user
 from .models import KnowledgeBaseDocument, User
 
@@ -38,6 +39,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(kb.router)
+app.include_router(sessions.router)
 
 
 @app.get("/", tags=["Health"])
