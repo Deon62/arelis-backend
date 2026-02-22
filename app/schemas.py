@@ -33,3 +33,13 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     user_id: str | None = None
+
+
+class KBDocumentOut(BaseModel):
+    id: str
+    filename: str
+    content_type: str | None = None
+    size_bytes: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

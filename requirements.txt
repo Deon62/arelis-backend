@@ -7,3 +7,8 @@ python-jose[cryptography]
 python-multipart
 python-dotenv
 openai
+langchain-core
+langchain-community
+langchain-text-splitters
+chromadb
+pypdf

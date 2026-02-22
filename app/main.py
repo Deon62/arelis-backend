@@ -10,10 +10,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from .database import Base, engine
+from sqlalchemy.orm import Session
+
+from .database import Base, engine, get_db
 from .routers import auth
+from .routers import kb
 from .auth import get_current_user
-from .models import User
+from .models import KnowledgeBaseDocument, User
 
 Base.metadata.create_all(bind=engine)
 
@@ -34,6 +37,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(kb.router)
 
 
 @app.get("/", tags=["Health"])
@@ -68,6 +72,20 @@ Rules you MUST follow:
 7. When unsure, say so honestly rather than guessing.
 8. Never provide advice on criminal law, family law, personal injury, or other non-business matters."""
 
+RAG_GUIDANCE = """
+You have access to the user's uploaded Knowledge Base documents (PDFs) via retrieval. If the user asks whether you can access their Knowledge Base, the correct answer is YES: you can search and use their uploaded PDFs when it helps answer their question.
+
+You may be provided with optional excerpts from the user's uploaded Knowledge Base documents (PDFs).
+
+How to use them:
+- Use the excerpts ONLY when they are relevant to the user's question.
+- If the excerpts are not relevant, ignore them and answer normally.
+- If you use the excerpts, still provide broader Kenyan-law context and practical recommendations beyond the document text.
+- Even when using excerpts, improve the answer: add missing considerations, challenge assumptions, and recommend next steps.
+- When you rely on the excerpts for a claim, include a short "Sources" section at the end with bullet points like:
+  - <filename> (p.<page>)
+"""
+
 
 class ChatMessage(BaseModel):
     role: str
@@ -87,6 +105,7 @@ def chat_ping():
 async def chat_stream(
     payload: ChatRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
@@ -96,9 +115,59 @@ async def chat_stream(
 
     client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for m in payload.messages:
-        messages.append({"role": m.role, "content": m.content})
+    history = [{"role": m.role, "content": m.content} for m in payload.messages]
+    query = ""
+    for m in reversed(payload.messages):
+        if m.role == "user":
+            query = m.content
+            break
+
+    kb_context_message = None
+    kb_inventory_message = None
+    try:
+        docs = (
+            db.query(KnowledgeBaseDocument)
+            .filter(KnowledgeBaseDocument.user_id == current_user.id)
+            .order_by(KnowledgeBaseDocument.created_at.desc())
+            .limit(8)
+            .all()
+        )
+        if docs:
+            names = ", ".join([d.filename for d in docs])
+            kb_inventory_message = {
+                "role": "system",
+                "content": f"User Knowledge Base contains {len(docs)} PDF(s) (most recent first): {names}.",
+            }
+    except Exception:
+        kb_inventory_message = None
+
+    try:
+        from .rag_store import retrieve_chunks, should_use_context
+
+        chunks = retrieve_chunks(user_id=current_user.id, query=query, k=6) if query else []
+        if query and should_use_context(query, chunks):
+            top = chunks[:4]
+            context_lines = []
+            for i, c in enumerate(top, start=1):
+                src = f"{c.filename}"
+                if c.page:
+                    src += f" (p.{c.page})"
+                context_lines.append(f"[{i}] {src}\n{c.text}")
+            kb_context_message = {
+                "role": "system",
+                "content": "Knowledge Base excerpts (user-provided):\n<kb>\n"
+                + "\n\n".join(context_lines)
+                + "\n</kb>",
+            }
+    except Exception:
+        kb_context_message = None
+
+    messages = [{"role": "system", "content": SYSTEM_PROMPT + "\n\n" + RAG_GUIDANCE}]
+    if kb_inventory_message:
+        messages.append(kb_inventory_message)
+    if kb_context_message:
+        messages.append(kb_context_message)
+    messages.extend(history)
 
     async def generate():
         stream = client.chat.completions.create(
