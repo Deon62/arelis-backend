@@ -1,0 +1,9 @@
+fastapi>=0.115.0
+uvicorn[standard]
+sqlalchemy
+pydantic[email]
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+python-dotenv
+openai
